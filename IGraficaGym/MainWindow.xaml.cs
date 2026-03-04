@@ -1,0 +1,497 @@
+﻿using _2HerenciaSimpleIES;
+using Microsoft.Win32;
+using System.IO;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using System.Windows.Shapes;
+using static IGraficaIES.ClaseWPFAuxiliar;
+
+namespace IGraficaIES
+{
+    /// <summary>
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
+    public partial class MainWindow : Window
+    {
+        // Fuente y Tamaño de la letra
+        public FontFamily fuente = new FontFamily("Calibri");
+        public double tamaño = 14;
+        // Lista para los controles
+        public List<Control> controlesGridCentral;
+        public List<Control> controlesGridBotones;
+        // Listas para profesores
+        private List<MonitorGymPublico> profesores = new List<MonitorGymPublico>();
+        private List<MonitorGymExtendido> profesoresEx = MonitorGymExtendido.CrearListaMonitoresEx();
+        // Indice del profesor que se muestra
+        private int profActual = 0;
+        public EstadoAPP estado = EstadoAPP.SinCargar;
+
+
+
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            // Deshabilito las herramientas hasta que se introduzca un archivo
+            Deshabilitar([gridCent, menuFiltros, menuAgrupacion, gridBtn]);
+            // Deshabilito los botones excepto el boton añadir
+            btnAnadir.On();
+            // Uso este metodo para crearme una lista con todos los controles del grid central y grid de los botones
+            controlesGridCentral = ObtenerControles(gridCent);
+            controlesGridBotones = ObtenerControles(gridBtn);
+            // Modifico la familia de la fuente y el tamaño a mi gusto
+            controlesGridCentral.ForEach(x => { x.FontFamily = fuente; x.FontSize = tamaño; });
+
+            // Añado los valores del ComboBox
+            for (int i = 22; i <= 70; i++)
+            {
+                cmbEdad.Items.Add(i);
+            }
+            // Añado los valores del ListBox
+            lsbSegMedico.Items.Add("S.Social");
+            lsbSegMedico.Items.Add("Muface");
+
+            // Cargo todas las imagenes de la interfaz exceptuando la de la foto de los profesores
+            CargarImagen(ref imgPrimero, "first_page.png");
+            CargarImagen(ref imgSiguiente, "arrow_forward.png");
+            CargarImagen(ref imgAnadir, "person_add.png");
+            CargarImagen(ref imgModificar, "person_edit.png");
+            CargarImagen(ref imgEliminar, "person_remove.png");
+            CargarImagen(ref imgGuardar, "save.png");
+            CargarImagen(ref imgCancelar, "cancel.png");
+            CargarImagen(ref imgAnterior, "arrow_back.png");
+            CargarImagen(ref imgUltimo, "last_page.png");
+            CargarImagen(ref menuAbrir, "file_open.png");
+            CargarImagen(ref menuSalir, "exit.png");
+            CargarImagen(ref menuNegrita, "format_bold.png");
+            CargarImagen(ref menuCursiva, "format_italic.png");
+            CargarImagen(ref menuEstatura, "straighten.png");
+            CargarImagen(ref menuMedico, "local.png");
+            Console.WriteLine(estado);
+        }
+        public void Abrir_Click(object sender, RoutedEventArgs e)
+        {
+            // Comprobamos si tenemos datos en la base de datos
+            if (ObternerLista<MonitorGymPublico>().Count != 0)
+            {
+                profesores = ObternerLista<MonitorGymPublico>();
+                profesoresEx = ObternerLista<MonitorGymExtendido>();
+            }
+            else
+            {
+                OpenFileDialog openFileDialog = new Microsoft.Win32.OpenFileDialog();
+
+                //Nos situamos en el directorio desde el que se ejecuta la aplicación
+                openFileDialog.InitialDirectory = Environment.CurrentDirectory;
+                //En el cuadro de diálogo se van a mostrar todos los archivos que sean de texto o //si no, todos
+                openFileDialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*";
+                //Por defecto, cuando se abra, nos va a mostrar los que sean de texto
+                openFileDialog.FilterIndex = 1;
+
+                if (openFileDialog.ShowDialog() == true) //Cuando el usuario le dé a Aceptar
+                {
+                    try
+                    {   //Obtengo una colección de líneas (en cada una están los datos
+                        //de un profesor), luego las iré recorriendo con un foreach
+                        var lineas = File.ReadLines(openFileDialog.FileName);
+
+                        foreach (var line in lineas)
+                        {
+                            string[] split = line.Split(";");
+                            //Diferencio entre profesores con y sin foto
+                            if (split.Length == 9)
+                            {
+                                profesores.Add(new MonitorGymPublico(split[0],
+                                    split[1],
+                                    Int32.Parse(split[2]),
+                                    split[4],
+                                    split[5] == "Experto" ? TipoMonitor.Experto : split[5] == "En Practicas" ? TipoMonitor.EnPracticas : TipoMonitor.Novato,
+                                    Int32.Parse(split[6]),
+                                    split[7] == "true",
+                                    split[8] == "SS" ? TipoMed.SeguridadSocial : TipoMed.Muface
+                                    )
+                                );
+                            }
+                            else
+                            {
+                                profesores.Add(new MonitorGymPublico(split[0],
+                                    split[1],
+                                    Int32.Parse(split[2]),
+                                    split[4],
+                                    split[5] == "Experto" ? TipoMonitor.Experto : split[5] == "En Practicas" ? TipoMonitor.EnPracticas : TipoMonitor.Novato,
+                                    Int32.Parse(split[6]),
+                                    split[7] == "true",
+                                    split[8] == "SS" ? TipoMed.SeguridadSocial : TipoMed.Muface,
+                                    split[9])
+                                );
+                            }
+
+                        }
+                        profesoresEx = MonitorGymExtendido.CrearListaMonitoresEx();
+                        InsertarDatos(ref profesores);
+                        InsertarDatos(ref profesoresEx);
+                    }
+                    catch (Exception ex)
+                    {
+                        profesores.Clear();
+                        //Mensajes de error en caso de no poder leer bien el fichero
+                        Mensaje("No se ha podido leer el archivo", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        Console.WriteLine("Error en la lectura del fichero: " + openFileDialog.FileName);
+                    }
+                }
+
+            }
+            if (profesores.Count != 0)
+            {
+                // Habilito lo que anteriormente deshabilite
+                Habilitar([menuFiltros, menuAgrupacion, gridBtn]);
+                estado = EstadoAPP.Listar;
+                // Relleno los datos del primero de la lista y deshabilito los botones necesarios Con un metodo de extension nuevo
+                ControlLista(this, profActual, profesores.Count);
+                MonitorGymPublico p = (MonitorGymPublico)profesores[profActual];
+                RellenarDatos(p, this);
+            }
+            Console.WriteLine(estado);
+        }
+        public void Salir_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
+        }
+        // Uso la lista de controles que me cree anteriormente para CAMBIAR la letra NEGRITA y CURSIVA
+        public void Negrita_Checked(object sender, RoutedEventArgs e)
+        {
+            controlesGridCentral.ForEach(x => x.FontWeight = FontWeights.Bold);
+        }
+        public void Negrita_Unchecked(object sender, RoutedEventArgs e)
+        {
+            controlesGridCentral.ForEach(x => x.FontWeight = FontWeights.Normal);
+        }
+        public void Cursiva_Checked(object sender, RoutedEventArgs e)
+        {
+            controlesGridCentral.ForEach(x => x.FontStyle = FontStyles.Italic);
+        }
+        public void Cursiva_Unchecked(object sender, RoutedEventArgs e)
+        {
+            controlesGridCentral.ForEach(x => x.FontStyle = FontStyles.Normal);
+        }
+        //Metodos para el funcionamiento de los botonos, Se bloquean los botones al principio y final de la lista
+        public void btnPrimero_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Listar;
+            profActual = 0;
+            ControlLista(this, profActual, profesores.Count);
+            RellenarDatos(profesores[profActual], this);
+        }
+        public void btnAnterior_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Listar;
+            profActual--;
+            ControlLista(this, profActual, profesores.Count);
+            RellenarDatos(profesores[profActual], this);
+        }
+        public void btnSiguiente_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Listar;
+            profActual++;
+            ControlLista(this, profActual, profesores.Count);
+            RellenarDatos(profesores[profActual], this);
+        }
+        public void btnUltimo_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Listar;
+            profActual = profesores.Count - 1;
+            ControlLista(this, profActual, profesores.Count);
+            RellenarDatos(profesores[profActual], this);
+        }
+        // Metodos para los botones con funcion CRUD
+        public void btnAnadir_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Inserccion;
+            BorrarCampos(this);
+            AlternarFoto(this);
+            controlesGridBotones.Deshabilitar();
+            Habilitar([btnCancelar, btnGuardar, gridCent]);
+            txtEmail.Off();
+        }
+        public void btnModificar_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Modificacion;
+            AlternarFoto(this);
+            controlesGridBotones.Deshabilitar();
+            Habilitar([btnCancelar, btnGuardar, gridCent, txtNombre]);
+            Deshabilitar([txtApellidos, txtEmail]);
+        }
+        public void btnEliminar_Click(object sender, RoutedEventArgs e)
+        {
+            estado = EstadoAPP.Eliminacion;
+            MonitorGymPublico p = profesores[profActual];
+            BorrarDatos(p);
+            profesores.Remove(p);
+            // Borrado en cascada en la lista 
+            MonitorGymExtendido pex = new MonitorGymExtendido();
+            pex.MonitorGymPublicoId = p.Id;
+            profesoresEx.Remove(pex);
+            profActual = 0;
+            // Controlo si despues de borrar sigo teniendo elementos en la lista, en caso de no tener vuelvo al estado incial
+            if (profesores.Count == 0)
+            {
+                estado = EstadoAPP.SinCargar;
+                Deshabilitar([gridCent, menuFiltros, menuAgrupacion, gridBtn]);
+                btnAnadir.On();
+                BorrarCampos(this);
+            }
+            else
+            {
+                
+                RellenarDatos(profesores[profActual], this);
+                Mensaje("La operacion de borrado ha tenido exito", "Informacion", MessageBoxButton.OK, MessageBoxImage.Information);
+                ControlLista(this, profActual, profesores.Count);
+
+            }
+
+        }
+        public void btnCancelar_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBoxResult result = Mensaje("¿Está seguro de que desea Cancelar la operación?", "FILTRAR POR Edad", MessageBoxButton.OKCancel, MessageBoxImage.Information);
+            if (result == MessageBoxResult.OK)
+            {
+                // Controlo si tengo elementos en la lista  si no los tengo devuelvo la app al estado inicial
+                if (profesores.Count != 0)
+                {
+                    profActual = 0;
+                    // Habilito lo que anteriormente deshabilite
+                    Habilitar([menuFiltros, menuAgrupacion, gridBtn]);
+                    // Relleno los datos del primero de la lista y deshabilito los botones necesarios Con un metodo de extension nuevo
+
+                    ControlLista(this, profActual, profesores.Count);
+                    MonitorGymPublico p = (MonitorGymPublico)profesores[profActual];
+                    RellenarDatos(p, this);
+                }
+                else
+                {
+                    estado = EstadoAPP.SinCargar;
+                    Deshabilitar([gridCent, menuFiltros, menuAgrupacion, gridBtn]);
+                    btnAnadir.On();
+                    BorrarCampos(this);
+                    AlternarFoto(this);
+                }
+            }
+        }
+
+        public void btnGuardar_Click(object sender, RoutedEventArgs e)
+        {
+            string controlErroneo;
+            if (!CheckCampos(controlesGridCentral, out controlErroneo))
+            {
+                Mensaje("No has introducido un " + controlErroneo + " valido",
+                         "Advertencia", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Recuperamos el TipoMonitor de forma segura
+            TipoMonitor tipoMonitor = rdbExperto.IsChecked == true ? TipoMonitor.Experto :
+                                      rdbEnPracticas.IsChecked == true ? TipoMonitor.EnPracticas :
+                                      TipoMonitor.Novato;
+
+            switch (estado)
+            {
+                case EstadoAPP.Inserccion:
+                    // Tomamos los datos del nuevo monitor
+                    MonitorGymPublico nuevo = new MonitorGymPublico(txtNombre.Text,
+                                                                    txtApellidos.Text,
+                                                                    Int32.Parse(cmbEdad.SelectedValue.ToString()),
+                                                                    "",
+                                                                    tipoMonitor,
+                                                                    Int32.Parse(txtAnioIngreso.Text),
+                                                                    (bool)chkDestino.IsChecked,
+                                                                    lsbSegMedico.SelectedValue?.ToString() == "Muface" ? TipoMed.Muface : TipoMed.SeguridadSocial,
+                                                                    txtRutaFoto.Text);
+
+                    // Y lo añadimos tanto a la lista como a la BD
+                    profesores.Add(nuevo);
+                    InsertarDatos(nuevo);
+                    Deshabilitar([txtNombre, txtApellidos, cmbEdad, txtAnioIngreso, lsbSegMedico, stkTipo, chkDestino]); //Deshabilitamos los controles que estaban activados
+                    break;
+
+                case EstadoAPP.Modificacion:
+                    // Tomamos el objeto que ya está en la lista
+                    MonitorGymPublico existente = profesores[profActual];
+
+                    // Actualizamos solo los campos que cambian
+                    existente.Nombre = txtNombre.Text;
+                    existente.Apellidos = txtApellidos.Text;
+                    existente.Edad = Int32.Parse(cmbEdad.SelectedValue.ToString());
+                    existente.TipoMonitor = tipoMonitor;
+                    existente.AnyoIngresoCuerpo = Int32.Parse(txtAnioIngreso.Text);
+                    existente.DestinoDefinitivo = (bool)chkDestino.IsChecked;
+                    existente.TipoMedico = lsbSegMedico.SelectedValue?.ToString() == "Muface" ? TipoMed.Muface : TipoMed.SeguridadSocial;
+                    existente.RutaFoto = txtRutaFoto.Text;
+
+                    // Guardamos cambios en la BD
+                    ModificarDatos(existente);
+
+                    // Refrescamos la lista
+                    profesores = ObternerLista<MonitorGymPublico>();
+                    Deshabilitar([txtNombre, cmbEdad, txtAnioIngreso, lsbSegMedico, stkTipo, chkDestino]); // Deshabilitamos los controles que estaban activados
+                    break;
+            }
+
+            profActual = 0;
+            RellenarDatos(profesores[profActual], this);
+            Mensaje("La operacion de " + estado.ToString() + " ha tenido exito",
+                    "Informacion", MessageBoxButton.OK, MessageBoxImage.Information);
+            menuFiltros.On();
+            menuAgrupacion.On();
+            ControlLista(this, profActual, profesores.Count);
+        }
+
+        // Metodo para rellenar el campo de email cuando el usuario rellena el campo de apellidos
+        private void txtApellidos_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(txtApellidos.Text) && !string.IsNullOrWhiteSpace(txtNombre.Text))
+            {
+                MonitorGym p = new MonitorGymPublico(0, txtApellidos.Text, txtNombre.Text);
+                txtEmail.Text = p.Id;
+            }
+        }
+        // Filtros
+        public void Filtro1_Click(object sender, RoutedEventArgs e)
+        {
+            var mayoresDe35 = profesores
+                .Where(x => x.Edad > 35)
+                .Select(x => new
+                {
+                    x.Nombre,
+                    x.Apellidos,
+                    x.Edad,
+                    x.Especializacion
+                });
+            string salida = CrearStringMensaje(mayoresDe35);
+            Mensaje(salida, "FILTRAR POR Edad", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        public void Filtro2_Click(object sender, RoutedEventArgs e)
+        {
+            var posteriorIgualA2010 = profesores
+                .Where(x => x.AnyoIngresoCuerpo >= 2010)
+                .Select(x => x);
+            string salida = CrearStringMensaje(posteriorIgualA2010);
+
+            Mensaje(salida, "FILTRAR POR Año de Ingreso", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        public void Filtro3_Click(object sender, RoutedEventArgs e)
+        {
+            var anyo2010YCasado = profesores
+                .Join(profesoresEx,
+                (pf => pf.Id),
+                (px => px.MonitorGymPublicoId),
+                (pf, px) => new
+                {
+                    pf.Nombre,
+                    pf.Apellidos,
+                    pf.AnyoIngresoCuerpo,
+                    px.ECivil
+                })
+                .Where(x => x.AnyoIngresoCuerpo >= 2010)
+                .Where(x => x.ECivil == EstadCivil.Casado);
+            string salida = CrearStringMensaje(anyo2010YCasado);
+
+            Mensaje(salida, "FILTRAR POR Año de Ingreso Y Estado Civil", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        public void Filtro4_Click(object sender, RoutedEventArgs e)
+        {
+            var Estatura160 = profesores
+                .Join(profesoresEx,
+                (pf => pf.Id),
+                (px => px.MonitorGymPublicoId),
+                (pf, px) => new
+                {
+                    pf.Nombre,
+                    pf.Apellidos,
+                    pf.Edad,
+                    px.Estatura,
+                    px.Peso
+                })
+                .Where(x => x.Estatura >= 160)
+                .OrderByDescending(x => x.Estatura)
+                .ThenByDescending(x => x.Peso);
+            string salida = CrearStringMensaje(Estatura160);
+
+            Mensaje(salida, "FILTRAR POR Estatura", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        //Agrupaciones
+        public void Agrupacion1_Click(object sender, RoutedEventArgs e)
+        {
+            var gruposEcivil = profesores
+                .Join(profesoresEx,
+                (pf => pf.Id),
+                (px => px.MonitorGymPublicoId),
+                (pf, px) => new
+                {
+                    pf.Nombre,
+                    pf.Apellidos,
+                    pf.Edad,
+                    px.Peso,
+                    px.Estatura,
+                    px.ECivil
+                }).GroupBy(x => x.ECivil);
+            string salida = CrearStringMensaje(gruposEcivil, false);
+            Mensaje(salida, "AGRUPAR POR Estado Civil", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        public void Agrupacion2_Click(object sender, RoutedEventArgs e)
+        {
+            var gruposEcivilCuenta = profesoresEx
+               .GroupBy(p => p.ECivil)
+               .Select(p => new
+               {
+                   Grupo = p.Key,
+                   Total = p.Count()
+               });
+            string salida = CrearStringMensaje(gruposEcivilCuenta);
+            Mensaje(salida, "AGRUPAR POR Estado Civil con Contador", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        public void Agrupacion3_Click(object sender, RoutedEventArgs e)
+        {
+            var gruposEcivilCuenta = profesores
+               .Select(p => new
+               {
+                   p.Nombre,
+                   p.Apellidos,
+                   p.Edad,
+                   Madurez = p.Edad < 40 ? "Joven" : p.Edad < 60 ? "Maduro" : "Por Jubilarse"
+               })
+               .OrderByDescending(x => x.Edad)
+               .GroupBy(x => x.Madurez);
+            string salida = CrearStringMensaje(gruposEcivilCuenta, false);
+            Mensaje(salida, "AGRUPAR POR Madurez", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        public void Agrupacion4_Click(object sender, RoutedEventArgs e)
+        {
+            var gruposSMedico = profesores
+                .Where(x => x.Edad >= 40)
+                .Join(profesoresEx,
+                (pf => pf.Id),
+                (px => px.MonitorGymPublicoId),
+                (pf, px) => new
+                {
+                    pf.Nombre,
+                    pf.Apellidos,
+                    pf.TipoMedico,
+                    px.Peso,
+                })
+                .OrderBy(x => x.Peso)
+                .ThenBy(x => x.Apellidos)
+                .GroupBy(x => x.TipoMedico);
+            string salida = CrearStringMensaje(gruposSMedico, true);
+            Mensaje(salida, "AGRUPAR POR Seguro Medico", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+    }
+}
